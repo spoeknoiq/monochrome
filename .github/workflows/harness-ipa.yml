@@ -21,6 +21,11 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v4
 
+      - name: Select Xcode 26 SDK
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: '26.0'
+
       - name: Install Theos (for Logos)
         shell: bash
         run: |
@@ -64,16 +69,23 @@ jobs:
               -framework UIKit -framework QuartzCore -framework CoreGraphics -framework CoreImage -framework Foundation -framework Symbols \
               -o "$appdir/$app"
 
-            /usr/libexec/PlistBuddy -c "Add :CFBundleExecutable string $app" \
-              -c "Add :CFBundleIdentifier string $bundle" \
-              -c "Add :CFBundleName string $app" \
-              -c 'Add :CFBundleVersion string 1' \
-              -c 'Add :CFBundleShortVersionString string 1.0' \
-              -c 'Add :UIUserInterfaceStyle string Dark' \
-              -c 'Add :UILaunchScreen dict' \
-              -c 'Add :UIApplicationSceneManifest dict' \
-              -c 'Add :UIApplicationSceneManifest: UIApplicationSupportsMultipleScenes bool false' \
-              "$appdir/Info.plist"
+            cat > "$appdir/Info.plist" <<PLIST
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0"><dict>
+          <key>CFBundleExecutable</key><string>$app</string>
+          <key>CFBundleIdentifier</key><string>$bundle</string>
+          <key>CFBundleName</key><string>$app</string>
+          <key>CFBundleVersion</key><string>1</string>
+          <key>CFBundleShortVersionString</key><string>1.0</string>
+          <key>MinimumOSVersion</key><string>17.0</string>
+          <key>UIUserInterfaceStyle</key><string>Dark</string>
+          <key>UILaunchScreen</key><dict/>
+          <key>UIApplicationSceneManifest</key><dict>
+            <key>UIApplicationSupportsMultipleScenes</key><false/>
+          </dict>
+          </dict></plist>
+          PLIST
 
             cp -R "$appdir" "$out/Payload/$app.app"
             (cd "$out" && /usr/bin/zip -qry "$app.ipa" Payload)
