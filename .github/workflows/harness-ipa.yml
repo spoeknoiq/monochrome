@@ -27,11 +27,66 @@ jobs:
           git clone --depth 1 --recursive https://github.com/theos/theos.git "$HOME/theos"
           echo "THEOS=$HOME/theos" >> "$GITHUB_ENV"
 
-      - name: Build album harness IPA
-        run: sh harness/album/build-device.sh
+      - name: Build unsigned device IPAs
+        shell: bash
+        run: |
+          set -euo pipefail
+          export THEOS="$HOME/theos"
+          ROOT="$GITHUB_WORKSPACE"
+          SRC="$ROOT/tweak/Sources"
 
-      - name: Build artist harness IPA
-        run: sh harness/artist/build-device.sh
+          build_harness() {
+            local kind="$1" app="$2" bundle="$3"
+            shift 3
+            local dir="$ROOT/harness/$kind" out="$ROOT/harness/$kind/build"
+            local generated="$out/gen" appdir="$out/$app.app"
+            rm -rf "$out"
+            mkdir -p "$generated" "$appdir" "$out/Payload"
+
+            for source in "$@"; do
+              local name="${source##*/}"
+              name="${name%.x}"
+              "$THEOS/bin/logos.pl" -c generator=internal "$SRC/$source" > "$generated/$name.m"
+            done
+
+            local sdk
+            sdk="$(xcrun --sdk iphoneos --show-sdk-path)"
+            xcrun --sdk iphoneos clang -target arm64-apple-ios17.0 -fobjc-arc -g -O0 \
+              -I"$SRC" -I"$SRC/Redesigned/$kind" -I"$generated" -isysroot "$sdk" \
+              -Wno-deprecated-declarations \
+              "$dir/main.m" "$dir/stubs.m" "$generated"/*.m \
+              "$SRC/Core/SGLog.m" "$SRC/Core/SGPrefs.m" "$SRC/Core/SGViewTree.m" "$SRC/Core/SGGlass.m" \
+              "$SRC/Core/SGBackdrop.m" "$SRC/Core/SGFlagForce.m" "$SRC/Core/SGUIMode.m" \
+              "$SRC/Redesigned/Kit/SGRTokens.m" "$SRC/Redesigned/Kit/SGRPalette.m" "$SRC/Redesigned/Kit/SGRField.m" "$SRC/Redesigned/Kit/SGRFlow.m" \
+              "$SRC/Redesigned/Kit/SGRGlass.m" "$SRC/Redesigned/Kit/SGRGlyph.m" "$SRC/Redesigned/Kit/SGRRestyle.m" \
+              "$SRC/Redesigned/Kit/SGRActionRow.m" "$SRC/Redesigned/Kit/SGRDownload.m" "$SRC/Redesigned/Kit/SGRHeaderInfo.m" \
+              "$SRC/Redesigned/Kit/SGRedesign.m" \
+              -framework UIKit -framework QuartzCore -framework CoreGraphics -framework CoreImage -framework Foundation -framework Symbols \
+              -o "$appdir/$app"
+
+            /usr/libexec/PlistBuddy -c "Add :CFBundleExecutable string $app" \
+              -c "Add :CFBundleIdentifier string $bundle" \
+              -c "Add :CFBundleName string $app" \
+              -c 'Add :CFBundleVersion string 1' \
+              -c 'Add :CFBundleShortVersionString string 1.0' \
+              -c 'Add :UIUserInterfaceStyle string Dark' \
+              -c 'Add :UILaunchScreen dict' \
+              -c 'Add :UIApplicationSceneManifest dict' \
+              -c 'Add :UIApplicationSceneManifest: UIApplicationSupportsMultipleScenes bool false' \
+              "$appdir/Info.plist"
+
+            cp -R "$appdir" "$out/Payload/$app.app"
+            (cd "$out" && /usr/bin/zip -qry "$app.ipa" Payload)
+            rm -rf "$out/Payload" "$generated"
+            echo "Built unsigned IPA: harness/$kind/build/$app.ipa"
+          }
+
+          build_harness album AlbumHarness com.vojta.albumharness \
+            Redesigned/Album/AlbumField.x Redesigned/Album/AlbumHeader.x \
+            Redesigned/Album/AlbumRows.x Redesigned/Album/AlbumSections.x
+          build_harness artist ArtistHarness com.vojta.artistharness \
+            Redesigned/Artist/ArtistField.x Redesigned/Artist/ArtistHeader.x \
+            Redesigned/Artist/ArtistSections.x Redesigned/Artist/ArtistFollow.x
 
       - name: Upload harness IPAs
         uses: actions/upload-artifact@v4
