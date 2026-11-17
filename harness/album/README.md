@@ -13,6 +13,19 @@ on the Mac without the phone.
 real `Core/` and `Redesigned/Kit/` sources; `stubs.m` stands in for the two hook files the harness
 does not compile (`SGRAccent.x`, `SGRRepaint.x`).
 
+## Build an iPhone IPA
+
+On macOS with Xcode/iPhoneOS SDK and Theos installed, build the device-targeted, **unsigned** IPA:
+
+    THEOS=$HOME/theos sh ./build-device.sh
+
+The output is `build/AlbumHarness.ipa`. This separate script targets `arm64-apple-ios17.0` and
+packages the app under `Payload/`; it does not change the simulator-oriented `build.sh`. It does not
+sign the app. Import the IPA into a tool that can sign/launch it, such as a compatible setup of
+LiveContainer or zContainer. Whether a particular container accepts and signs this IPA format is up
+to that app and its configuration. The minimum deployment target is iOS 17; this harness does not
+include Spotify or inject into Spotify.
+
 The mock is the page as Spotify builds it: the colour wash behind the header, the header itself down
 its four stack views, the metadata row as a real collection view with its own cells, the action row of
 explore, add, download and more, the two controls Spotify floats over the page outside the scroll
