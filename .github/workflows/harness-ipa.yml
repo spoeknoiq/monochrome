@@ -1,0 +1,45 @@
+name: Build harness IPAs
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'harness/**'
+      - 'tweak/Sources/Core/**'
+      - 'tweak/Sources/Redesigned/Kit/**'
+      - 'tweak/Sources/Redesigned/Album/**'
+      - 'tweak/Sources/Redesigned/Artist/**'
+      - '.github/workflows/harness-ipa.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: macos-15
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Install Theos (for Logos)
+        shell: bash
+        run: |
+          git clone --depth 1 --recursive https://github.com/theos/theos.git "$HOME/theos"
+          echo "THEOS=$HOME/theos" >> "$GITHUB_ENV"
+
+      - name: Build album harness IPA
+        run: sh harness/album/build-device.sh
+
+      - name: Build artist harness IPA
+        run: sh harness/artist/build-device.sh
+
+      - name: Upload harness IPAs
+        uses: actions/upload-artifact@v4
+        with:
+          name: monochrome-harness-ipas
+          path: |
+            harness/album/build/AlbumHarness.ipa
+            harness/artist/build/ArtistHarness.ipa
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 7
