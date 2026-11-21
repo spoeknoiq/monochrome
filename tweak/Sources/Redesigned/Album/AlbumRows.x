@@ -22,13 +22,13 @@
 #import "Album.h"
 
 static const CGFloat kHairline = 0.5;
-// Fixed leading column: track number right-aligned in kNumberWidth, then kNumberGap to the text.
-// SGRSideMargin is an extern const CGFloat, so static constants use helper macros/inlines instead of global init.
-static const CGFloat kNumberWidth = 24, kNumberGap = 8;
-#define kNumberLeft SGRSideMargin
-#define kHairlineLeft (SGRSideMargin + kNumberWidth + kNumberGap)
+// Apple Music column layout:
+// Star at x=16 (width=12), Track number at x=30 (width=18, right-aligned), Title at x=56.
+static const CGFloat kStarLeft = 16, kStarWidth = 12;
+static const CGFloat kNumberLeft = 30, kNumberWidth = 18;
+static const CGFloat kHairlineLeft = 56;
 
-static char kRowKey, kSubtitleKey, kLineKey, kNumberKey, kTitleKey2;
+static char kRowKey, kSubtitleKey, kLineKey, kNumberKey, kStarKey, kTitleKey2, kContextBtnKey;
 
 static void clearSurface(UIView *view) {
     UIColor *color = view.backgroundColor;
@@ -43,7 +43,7 @@ static void applyHairline(UIView *row) {
         line.zPosition = 1;
         objc_setAssociatedObject(row, &kLineKey, line, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     }
-    line.backgroundColor = SGRHairline().CGColor;
+    line.backgroundColor = [UIColor colorWithWhite:1 alpha:0.12].CGColor;
     if (line.superlayer != row.layer) [row.layer addSublayer:line];
     CGRect bounds = row.bounds;
     CGRect frame = CGRectMake(kHairlineLeft, bounds.size.height - kHairline,
@@ -70,7 +70,6 @@ static UILabel *cachedLabel(UIView *row, const void *key, UILabel *(^make)(void)
 // by looking for the number label in EncoreConsumerMobile.View.Granular.TrackNumber, falling back to
 // reading the index from whatever numeric label sits before the title at the leading edge.
 static NSString *trackNumberText(UIView *row) {
-    // Spotify's tree may carry a dedicated TrackNumber element.
     __block NSString *found = nil;
     SGForEachView(row, ^(UIView *v) {
         if (found || ![v isKindOfClass:UILabel.class]) return;
@@ -103,56 +102,81 @@ static void applyRow(UIView *cell) {
     clearSurface(cell);
     UIView *row = SGRFindByIdentifier(cell, @"Components.UI.RetrievalRow*", &kRowKey);
     if (!row) return;
-    // The row, and every box the element framework wraps it in on the way back up to the cell.
     for (UIView *v = row; v; v = v.superview) {
         clearSurface(v);
         if (v == cell) break;
     }
 
-    UIView *subtitle = SGRFindByIdentifier(row, @"EncoreConsumerMobile.View.Granular.Subtitle", &kSubtitleKey);
-    SGForEachView(subtitle, ^(UIView *v) {
-        if (![v isKindOfClass:UILabel.class]) return;
-        UILabel *label = (UILabel *)v;
-        if (![label.textColor isEqual:SGRSecondary()]) label.textColor = SGRSecondary();
-    });
+    CGRect bounds = row.bounds;
 
-    // --- track number label (Apple Music style: right-aligned in a fixed column at the leading edge) ---
+    // In Apple Music, on an album by a single artist, tracks do NOT display a redundant subtitle
+    // repeating the artist name under every title. Hiding it makes the row single-line and clean.
+    UIView *subtitle = SGRFindByIdentifier(row, @"EncoreConsumerMobile.View.Granular.Subtitle", &kSubtitleKey);
+    if (subtitle && !subtitle.hidden) {
+        subtitle.hidden = YES;
+    }
+
+    // --- star label (for popular tracks: subtle grey star to the left of the number) ---
+    BOOL popular = isPopularRow(row);
+    UILabel *starLabel = cachedLabel(row, &kStarKey, ^UILabel *{
+        UILabel *l = [UILabel new];
+        l.font = [UIFont systemFontOfSize:11 weight:UIFontWeightRegular];
+        l.textColor = [UIColor colorWithWhite:1 alpha:0.45];
+        l.textAlignment = NSTextAlignmentCenter;
+        l.text = @"★";
+        l.userInteractionEnabled = NO;
+        l.accessibilityElementsHidden = YES;
+        return l;
+    });
+    starLabel.frame = CGRectMake(kStarLeft, 0, kStarWidth, bounds.size.height);
+    starLabel.hidden = !popular;
+
+    // --- track number label (Apple Music style: right-aligned in a fixed column) ---
     NSString *numText = trackNumberText(row);
     UILabel *numLabel = cachedLabel(row, &kNumberKey, ^UILabel *{
         UILabel *l = [UILabel new];
-        // Monospaced digits so single- and double-digit numbers align.
-        UIFont *base = [UIFont monospacedDigitSystemFontOfSize:13 weight:UIFontWeightRegular];
-        l.font = base;
-        l.textColor = SGRTertiary();
+        l.font = [UIFont monospacedDigitSystemFontOfSize:14 weight:UIFontWeightRegular];
+        l.textColor = [UIColor colorWithWhite:1 alpha:0.5];
         l.textAlignment = NSTextAlignmentRight;
         l.userInteractionEnabled = NO;
         l.accessibilityElementsHidden = YES;
         return l;
     });
-    if (numText) {
-        BOOL popular = isPopularRow(row);
-        // ★ before popular track numbers, in the accent colour.
-        numLabel.text = popular ? [@"★" stringByAppendingString:numText] : numText;
-        numLabel.textColor = popular ? SGRAccent() : SGRTertiary();
-    }
-    CGRect bounds = row.bounds;
+    if (numText) numLabel.text = numText;
     numLabel.frame = CGRectMake(kNumberLeft, 0, kNumberWidth, bounds.size.height);
     numLabel.hidden = (numText == nil);
 
-    // --- push the title and subtitle to start after the number column ---
+    // --- title: vertically centered single line, starting at x = 56 ---
     UIView *titleContainer = SGRFindByIdentifier(row, @"EncoreConsumerMobile.View.Granular.Title", &kTitleKey2);
-    UIView *subtitleContainer = subtitle; // already found above
     CGFloat textLeft = kHairlineLeft;
-    CGFloat textRight = bounds.size.width - SGRSideMargin - 44; // leave room for ⋯
-    for (UIView *container in @[titleContainer, subtitleContainer]) {
-        if (!container) continue;
-        CGRect f = container.frame;
-        // Only shift when it's sitting at or near the original margin (not already moved, not spanning the row).
-        if (f.origin.x < textLeft - 1 || f.origin.x > textLeft + 4) {
-            f.origin.x = textLeft;
-            f.size.width = MAX(0, textRight - textLeft);
-            container.frame = f;
-        }
+    CGFloat textRight = bounds.size.width - SGRSideMargin - 40; // room for ⋯
+    if (titleContainer) {
+        CGRect tf = CGRectMake(textLeft, round((bounds.size.height - 22) / 2),
+                               MAX(0, textRight - textLeft), 22);
+        if (!CGRectEqualToRect(titleContainer.frame, tf)) titleContainer.frame = tf;
+        SGForEachView(titleContainer, ^(UIView *v) {
+            if ([v isKindOfClass:UILabel.class]) {
+                UILabel *lbl = (UILabel *)v;
+                lbl.textColor = UIColor.whiteColor;
+                lbl.font = [UIFont systemFontOfSize:16 weight:UIFontWeightRegular];
+            }
+        });
+    }
+
+    // --- context menu ⋯: replace Spotify's 3 vertical dots with Apple Music's horizontal ellipsis ---
+    UIView *contextBtn = SGRFindByIdentifier(row, @"Components.UI.ContextMenuButton*", &kContextBtnKey);
+    if (contextBtn) {
+        SGForEachView(contextBtn, ^(UIView *v) {
+            if ([v isKindOfClass:UIImageView.class]) {
+                UIImageView *iv = (UIImageView *)v;
+                UIImage *sym = [UIImage systemImageNamed:@"ellipsis"];
+                if (iv.image != sym) {
+                    iv.image = sym;
+                    iv.tintColor = [UIColor colorWithWhite:1 alpha:0.4];
+                    iv.contentMode = UIViewContentModeCenter;
+                }
+            }
+        });
     }
 
     applyHairline(row);

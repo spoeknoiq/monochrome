@@ -37,7 +37,64 @@ static const CGFloat kMinHero = 120, kMinCover = 80;
 
 static char kHeaderKey, kCoverKey, kTitleKey, kParentKey, kMetaKey, kAddKey, kDownloadKey, kPlayKey, kShuffleKey;
 static char kHeroKey, kHeroHeightKey, kHeaderHeightKey, kInfoKey, kHeaderWatchedKey, kRetryKey;
-static char kExploreKey, kRowWatchedKey, kMoreKey, kPinnedMoreKey, kShareKey, kPinnedShareKey;
+#pragma mark - top bar unified capsule [ Share | ⋯ ]
+
+// Apple Music (Photo 2 & 3) top-right unified glass capsule housing Share and More options.
+@interface SGRPinnedTopBarCapsule : UIView
+@property (nonatomic, strong) SGRMirrorButton *shareButton;
+@property (nonatomic, strong) SGRMirrorButton *moreButton;
+@property (nonatomic, strong) CALayer *divider;
+@end
+
+@implementation SGRPinnedTopBarCapsule
+- (instancetype)initWithFrame:(CGRect)frame {
+    if (!(self = [super initWithFrame:frame])) return nil;
+    self.layer.cornerRadius = 18;
+    self.layer.cornerCurve = kCACornerCurveContinuous;
+    self.clipsToBounds = YES;
+
+    // Frosted glass background capsule
+    SGRGlassCapsuleInside(self, (void *)&kPinnedShareKey, CGSizeMake(82, 36), NO);
+
+    _shareButton = [[SGRMirrorButton alloc] initWithFrame:CGRectMake(0, 0, 41, 36)];
+    _shareButton.fallbackGlyph = [UIImage systemImageNamed:@"square.and.arrow.up"];
+    _shareButton.glyphColor = SGRPrimary();
+    [self addSubview:_shareButton];
+
+    _divider = [CALayer layer];
+    _divider.backgroundColor = [UIColor colorWithWhite:1 alpha:0.18].CGColor;
+    _divider.frame = CGRectMake(40.75, 9, 0.5, 18);
+    [self.layer addSublayer:_divider];
+
+    _moreButton = [[SGRMirrorButton alloc] initWithFrame:CGRectMake(41, 0, 41, 36)];
+    _moreButton.fallbackGlyph = [UIImage systemImageNamed:@"ellipsis"];
+    _moreButton.glyphColor = SGRPrimary();
+    [self addSubview:_moreButton];
+    return self;
+}
+@end
+
+static void applyPinnedCapsule(UIView *page, UIView *header) {
+    UIView *shareSource = SGRFindByIdentifier(header, @"Components.UI.ShareButton*", &kShareKey);
+    UIView *moreSource = SGRFindByIdentifier(header, @"Components.UI.ContextMenuButton*", &kMoreKey);
+
+    SGRPinnedTopBarCapsule *capsule = objc_getAssociatedObject(page, &kPinnedShareKey);
+    if (!capsule) {
+        capsule = [[SGRPinnedTopBarCapsule alloc] initWithFrame:CGRectMake(0, 0, 82, 36)];
+        objc_setAssociatedObject(page, &kPinnedShareKey, capsule, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    }
+    if (capsule.superview != page) [page addSubview:capsule];
+    else if (page.subviews.lastObject != capsule) [page bringSubviewToFront:capsule];
+
+    if (shareSource) [capsule.shareButton feedFrom:shareSource];
+    if (moreSource) [capsule.moreButton feedFrom:moreSource];
+
+    UIWindow *window = page.window;
+    CGFloat top = window ? window.safeAreaInsets.top : page.safeAreaInsets.top;
+    if (top < 20) top = 54;
+    CGFloat W = page.bounds.size.width;
+    capsule.frame = CGRectMake(W - 16 - 82, top + 4, 82, 36);
+}
 
 #pragma mark - moving Spotify's views
 
@@ -331,28 +388,8 @@ static SGRHeaderInfo *applyInfo(UIView *header, UIView *page) {
     // (issue #56).
     [info showCreatorLink:parent];
 
-    // More, pinned over the page rather than left in the header, which is blanked and scrolls away.
-    SGRMirrorButton *more = SGRPinnedMore(page, &kPinnedMoreKey, SGRFindByIdentifier(header, @"Components.UI.ContextMenuButton*", &kMoreKey));
-
-    // Share button: a glass circle beside ⋯, the way the Music app shows it -- both sit at the top trailing
-    // corner, with the share button one circle-width to the left of ⋯.
-    UIView *shareSource = SGRFindByIdentifier(header, @"Components.UI.ShareButton*", &kShareKey);
-    SGRMirrorButton *share = objc_getAssociatedObject(page, &kPinnedShareKey);
-    if (!share) {
-        share = [[SGRMirrorButton alloc] initWithFrame:CGRectZero];
-        share.fallbackGlyph = [UIImage systemImageNamed:@"square.and.arrow.up"];
-        share.glyphColor = SGRPrimary();
-        objc_setAssociatedObject(page, &kPinnedShareKey, share, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-    }
-    if (share.superview != page) [page addSubview:share];
-    if (shareSource) [share feedFrom:shareSource];
-    share.hidden = NO;
-    // Position the share button directly to the left of the ⋯ with a 4pt gap, same vertical centre.
-    if (!CGRectIsEmpty(more.frame)) {
-        CGRect mf = more.frame;
-        CGFloat side = SGRGlassCircleSize;
-        share.frame = CGRectMake(mf.origin.x - 4 - side, mf.origin.y, side, side);
-    }
+    // Unified [ Share | ⋯ ] glass capsule pinned to the top-right corner (Apple Music style).
+    applyPinnedCapsule(page, header);
 
     UIView *play = floatingIn(page, @"header-play-button", &kPlayKey);
     UIView *shuffle = floatingIn(page, @"Components.UI.ShuffleButton", &kShuffleKey);

@@ -40,23 +40,19 @@ static BOOL setText(UILabel *label, NSString *text) {
 
 - (instancetype)initWithFrame:(CGRect)frame {
     if (!(self = [super initWithFrame:frame])) return nil;
-    _title = infoLabel(self, SGRFont(UIFontTextStyleTitle2, UIFontWeightBold, UIContentSizeCategoryExtraLarge),
-                       SGRPrimary(), 2, NSTextAlignmentCenter);
+    _title = infoLabel(self, [UIFont systemFontOfSize:24 weight:UIFontWeightBold],
+                       UIColor.whiteColor, 2, NSTextAlignmentCenter);
     _title.accessibilityTraits = UIAccessibilityTraitHeader;
-    _creator = infoLabel(self, SGRFont(UIFontTextStyleBody, UIFontWeightRegular, UIContentSizeCategoryExtraLarge),
-                         SGRSecondary(), 1, NSTextAlignmentCenter);
-    _length = infoLabel(self, SGRFont(UIFontTextStyleFootnote, UIFontWeightRegular, UIContentSizeCategoryExtraLarge),
-                        SGRTertiary(), 1, NSTextAlignmentCenter);
+    _creator = infoLabel(self, [UIFont systemFontOfSize:18 weight:UIFontWeightMedium],
+                         [UIColor colorWithWhite:1 alpha:0.85], 1, NSTextAlignmentCenter);
+    _length = infoLabel(self, [UIFont systemFontOfSize:12.5 weight:UIFontWeightRegular],
+                        [UIColor colorWithWhite:1 alpha:0.55], 1, NSTextAlignmentCenter);
     // The editorial description: italic, the way the Music app shows it.
-    UIFont *aboutBase = SGRFont(UIFontTextStyleFootnote, UIFontWeightRegular, UIContentSizeCategoryExtraLarge);
-    UIFontDescriptor *aboutDescriptor = [aboutBase.fontDescriptor fontDescriptorWithSymbolicTraits:UIFontDescriptorTraitItalic];
-    UIFont *aboutFont = aboutDescriptor ? [UIFont fontWithDescriptor:aboutDescriptor size:0] : aboutBase;
-    _about = infoLabel(self, aboutFont, SGRSecondary(), 2, NSTextAlignmentNatural);
+    _about = infoLabel(self, [UIFont italicSystemFontOfSize:13.5],
+                       [UIColor colorWithWhite:1 alpha:0.75], 2, NSTextAlignmentNatural);
 
     _shuffle = [[SGRMirrorButton alloc] initWithFrame:CGRectZero];
     _shuffle.fallbackGlyph = [UIImage systemImageNamed:@"shuffle"];
-    // White like the buttons beside it while off -- Spotify's off grey read as a disabled button next to the
-    // white download (issue #65) -- and the accent while on, so its state still shows.
     _shuffle.glyphColor = SGRPrimary();
     _shuffle.onGlyphColor = SGRAccent();
     _play = [[SGRPlayCapsule alloc] initWithFrame:CGRectZero];
