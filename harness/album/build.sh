@@ -10,7 +10,7 @@ for f in Redesigned/Album/AlbumField.x Redesigned/Album/AlbumHeader.x Redesigned
 done
 
 SDK=$(xcrun --sdk iphonesimulator --show-sdk-path)
-xcrun -sdk iphonesimulator clang -target arm64-apple-ios17.0-simulator -fobjc-arc -g -O0 \
+xcrun -sdk iphonesimulator clang -target arm64-apple-ios17.0-simulator -fobjc-arc -O2 \
     -I"$SRC" -I"$SRC/Redesigned/Album" -I"$OUT/gen" -isysroot "$SDK" \
     -Wno-deprecated-declarations \
     "$(dirname "$0")/main.m" "$(dirname "$0")/stubs.m" \
@@ -49,5 +49,6 @@ cat > "$OUT/AlbumHarness.app/Info.plist" <<'PLIST'
 </dict>
 </dict></plist>
 PLIST
-codesign -s - --force --deep "$OUT/AlbumHarness.app" 2>/dev/null || true
+xcrun strip -x "$OUT/AlbumHarness.app/AlbumHarness" 2>/dev/null || true
+rm -rf "$OUT/AlbumHarness.app"/*.dSYM "$OUT"/*.dSYM
 echo "built $OUT/AlbumHarness.app"

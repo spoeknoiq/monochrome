@@ -10,7 +10,7 @@ for f in Redesigned/Artist/ArtistField.x Redesigned/Artist/ArtistHeader.x Redesi
 done
 
 SDK=$(xcrun --sdk iphonesimulator --show-sdk-path)
-xcrun -sdk iphonesimulator clang -target arm64-apple-ios17.0-simulator -fobjc-arc -g -O0 \
+xcrun -sdk iphonesimulator clang -target arm64-apple-ios17.0-simulator -fobjc-arc -O2 \
     -I"$SRC" -I"$SRC/Redesigned/Artist" -I"$OUT/gen" -isysroot "$SDK" \
     -Wno-deprecated-declarations \
     "$(dirname "$0")/main.m" "$(dirname "$0")/stubs.m" \
@@ -49,5 +49,6 @@ cat > "$OUT/ArtistHarness.app/Info.plist" <<'PLIST'
 </dict>
 </dict></plist>
 PLIST
-codesign -s - --force --deep "$OUT/ArtistHarness.app" 2>/dev/null || true
+xcrun strip -x "$OUT/ArtistHarness.app/ArtistHarness" 2>/dev/null || true
+rm -rf "$OUT/ArtistHarness.app"/*.dSYM "$OUT"/*.dSYM
 echo "built $OUT/ArtistHarness.app"

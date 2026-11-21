@@ -55,7 +55,7 @@ jobs:
           done
 
           sdk="$(xcrun --sdk iphoneos --show-sdk-path)"
-          xcrun --sdk iphoneos clang -target arm64-apple-ios17.0 -fobjc-arc -g -O0 \
+          xcrun --sdk iphoneos clang -target arm64-apple-ios17.0 -fobjc-arc -O2 \
             -I"$SRC" -I"$SRC/Redesigned/Album" -I"$GENERATED" -isysroot "$sdk" \
             -Wno-deprecated-declarations \
             "$DIR/main.m" "$DIR/stubs.m" "$GENERATED"/*.m \
@@ -67,6 +67,10 @@ jobs:
             "$SRC/Redesigned/Kit/SGRedesign.m" \
             -framework UIKit -framework QuartzCore -framework CoreGraphics -framework CoreImage -framework Foundation -framework Symbols \
             -o "$APPDIR/AlbumHarness"
+
+          # Strip debug symbols and eliminate any dSYM bundles that break zContainer / LiveContainer signing
+          xcrun strip -x "$APPDIR/AlbumHarness" 2>/dev/null || true
+          rm -rf "$APPDIR"/*.dSYM "$OUT"/*.dSYM
 
           # Full Info.plist compatible with LiveContainer, zContainer, TrollStore and standard resigners
           cat > "$APPDIR/Info.plist" <<'PLIST'
@@ -95,22 +99,13 @@ jobs:
           </dict></plist>
           PLIST
 
-          # Basic entitlements enabling signing in LiveContainer / zContainer
-          cat > "$OUT/entitlements.plist" <<'ENTITLEMENTS'
-          <?xml version="1.0" encoding="UTF-8"?>
-          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-          <plist version="1.0"><dict>
-          <key>get-task-allow</key><true/>
-          </dict></plist>
-          ENTITLEMENTS
-
-          # Ad-hoc sign so LiveContainer and zContainer find a valid code signature slot to re-sign
-          codesign -s - --force --deep --entitlements "$OUT/entitlements.plist" "$APPDIR"
+          # Clean up any residual dSYM or metadata from app directory before packaging
+          find "$APPDIR" -name "*.dSYM" -exec rm -rf {} + 2>/dev/null || true
 
           cp -R "$APPDIR" "$OUT/Payload/AlbumHarness.app"
           (cd "$OUT" && /usr/bin/zip -qry "AlbumHarness.ipa" Payload)
-          rm -rf "$OUT/Payload" "$GENERATED" "$OUT/entitlements.plist"
-          echo "Successfully built and signed AlbumHarness.ipa"
+          rm -rf "$OUT/Payload" "$GENERATED"
+          echo "Successfully built unsigned AlbumHarness.ipa"
 
       - name: Upload Album Harness IPA
         uses: actions/upload-artifact@v4
