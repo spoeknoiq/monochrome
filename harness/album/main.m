@@ -2,6 +2,7 @@
 // trees/clean/album/03.txt, so Redesigned/Album can be laid out and looked at on the Mac.
 #import <UIKit/UIKit.h>
 #import <objc/runtime.h>
+#import <objc/message.h>
 #import "../download-mock.h"
 
 #pragma mark - Spotify's classes, by name
@@ -810,8 +811,6 @@ static void addAppleMusicChrome(UIView *rootView, CGFloat W, CGFloat H, BOOL sta
         UIView *onName = [info hitTest:CGPointMake(CGRectGetMidX(info.bounds), CGRectGetMidY(artist.frame)) withEvent:nil];
         UIView *beside = [info hitTest:CGPointMake(24, CGRectGetMidY(artist.frame)) withEvent:nil];
         NSLog(@"[harness] artist line: on the name %@, beside it %@", onName ? NSStringFromClass(onName.class) : @"through",
-              beside ? NSStringFromClass(beside.class) : @"through");
-    });
               beside ? NSStringFromClass(beside.class) : @"through");
     });
 
