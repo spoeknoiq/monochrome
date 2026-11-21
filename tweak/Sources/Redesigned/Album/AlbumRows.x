@@ -23,9 +23,10 @@
 
 static const CGFloat kHairline = 0.5;
 // Fixed leading column: track number right-aligned in kNumberWidth, then kNumberGap to the text.
-static const CGFloat kNumberWidth = 24, kNumberGap = 8, kNumberLeft = SGRSideMargin;
-// The hairline starts where the text starts: after the number column.
-static const CGFloat kHairlineLeft = kNumberLeft + kNumberWidth + kNumberGap;
+// SGRSideMargin is an extern const CGFloat, so static constants use helper macros/inlines instead of global init.
+static const CGFloat kNumberWidth = 24, kNumberGap = 8;
+#define kNumberLeft SGRSideMargin
+#define kHairlineLeft (SGRSideMargin + kNumberWidth + kNumberGap)
 
 static char kRowKey, kSubtitleKey, kLineKey, kNumberKey, kTitleKey2;
 

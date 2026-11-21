@@ -528,11 +528,17 @@ static NSString *trailingLabel(UIView *root) {
         NSLog(@"[harness] pinned more: %@ on the page, hidden=%d",
               pinned ? NSStringFromCGRect(pinned.frame) : @"MISSING", pinned.hidden);
         __block UIView *info = nil, *artist = nil;
-        void (^__block walk)(UIView *) = ^(UIView *v) {
-            if ([NSStringFromClass(v.class) isEqualToString:@"SGRHeaderInfo"]) info = v;
-            for (UIView *sub in v.subviews) walk(sub);
+        __weak UIViewController *weakRoot = root;
+        void (^walk)(UIView *) = ^(UIView *v) {
+            NSMutableArray<UIView *> *queue = [NSMutableArray arrayWithObject:v];
+            while (queue.count) {
+                UIView *cur = queue.firstObject;
+                [queue removeObjectAtIndex:0];
+                if ([NSStringFromClass(cur.class) isEqualToString:@"SGRHeaderInfo"]) info = cur;
+                [queue addObjectsFromArray:cur.subviews];
+            }
         };
-        walk(root.view);
+        if (weakRoot.view) walk(weakRoot.view);
         for (UIView *sub in info.subviews) {
             if ([sub isKindOfClass:UILabel.class] && [((UILabel *)sub).text isEqualToString:@"The Weeknd"]) artist = sub;
         }
