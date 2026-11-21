@@ -37,6 +37,8 @@ static const CGFloat kMinHero = 120, kMinCover = 80;
 
 static char kHeaderKey, kCoverKey, kTitleKey, kParentKey, kMetaKey, kAddKey, kDownloadKey, kPlayKey, kShuffleKey;
 static char kHeroKey, kHeroHeightKey, kHeaderHeightKey, kInfoKey, kHeaderWatchedKey, kRetryKey;
+static char kExploreKey, kRowWatchedKey, kMoreKey, kPinnedMoreKey, kShareKey, kPinnedShareKey;
+
 #pragma mark - top bar unified capsule [ Share | ⋯ ]
 
 // Apple Music (Photo 2 & 3) top-right unified glass capsule housing Share and More options.

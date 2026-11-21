@@ -28,11 +28,20 @@ cat > "$OUT/ArtistHarness.app/Info.plist" <<'PLIST'
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0"><dict>
+<key>CFBundlePackageType</key><string>APPL</string>
+<key>CFBundleInfoDictionaryVersion</key><string>6.0</string>
+<key>CFBundleDevelopmentRegion</key><string>en</string>
 <key>CFBundleExecutable</key><string>ArtistHarness</string>
 <key>CFBundleIdentifier</key><string>com.vojta.artistharness</string>
 <key>CFBundleName</key><string>ArtistHarness</string>
+<key>CFBundleDisplayName</key><string>ArtistHarness</string>
 <key>CFBundleVersion</key><string>1</string>
 <key>CFBundleShortVersionString</key><string>1.0</string>
+<key>MinimumOSVersion</key><string>17.0</string>
+<key>CFBundleSupportedPlatforms</key><array><string>iPhoneOS</string><string>iPhoneSimulator</string></array>
+<key>LSRequiresIPhoneOS</key><true/>
+<key>UIDeviceFamily</key><array><integer>1</integer><integer>2</integer></array>
+<key>UISupportedInterfaceOrientations</key><array><string>UIInterfaceOrientationPortrait</string></array>
 <key>UIUserInterfaceStyle</key><string>Dark</string>
 <key>UILaunchScreen</key><dict/>
 <key>UIApplicationSceneManifest</key><dict>
@@ -40,4 +49,5 @@ cat > "$OUT/ArtistHarness.app/Info.plist" <<'PLIST'
 </dict>
 </dict></plist>
 PLIST
+codesign -s - --force --deep "$OUT/ArtistHarness.app" 2>/dev/null || true
 echo "built $OUT/ArtistHarness.app"

@@ -1,0 +1,122 @@
+name: Build Album Harness IPA
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'harness/album/**'
+      - 'tweak/Sources/Core/**'
+      - 'tweak/Sources/Redesigned/Kit/**'
+      - 'tweak/Sources/Redesigned/Album/**'
+      - '.github/workflows/harness-album.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build Album Harness
+    runs-on: macos-15
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Select Xcode 26 SDK
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: '26.0'
+
+      - name: Install Theos (for Logos)
+        shell: bash
+        run: |
+          git clone --depth 1 --recursive https://github.com/theos/theos.git "$HOME/theos"
+          echo "THEOS=$HOME/theos" >> "$GITHUB_ENV"
+
+      - name: Build and sign Album Harness IPA
+        shell: bash
+        run: |
+          set -euo pipefail
+          export THEOS="$HOME/theos"
+          ROOT="$GITHUB_WORKSPACE"
+          SRC="$ROOT/tweak/Sources"
+          DIR="$ROOT/harness/album"
+          OUT="$DIR/build"
+          GENERATED="$OUT/gen"
+          APPDIR="$OUT/AlbumHarness.app"
+
+          rm -rf "$OUT"
+          mkdir -p "$GENERATED" "$APPDIR" "$OUT/Payload"
+
+          for source in Redesigned/Album/AlbumField.x Redesigned/Album/AlbumHeader.x \
+                        Redesigned/Album/AlbumRows.x Redesigned/Album/AlbumSections.x; do
+            name="${source##*/}"
+            name="${name%.x}"
+            "$THEOS/bin/logos.pl" -c generator=internal "$SRC/$source" > "$GENERATED/$name.m"
+          done
+
+          sdk="$(xcrun --sdk iphoneos --show-sdk-path)"
+          xcrun --sdk iphoneos clang -target arm64-apple-ios17.0 -fobjc-arc -g -O0 \
+            -I"$SRC" -I"$SRC/Redesigned/Album" -I"$GENERATED" -isysroot "$sdk" \
+            -Wno-deprecated-declarations \
+            "$DIR/main.m" "$DIR/stubs.m" "$GENERATED"/*.m \
+            "$SRC/Core/SGLog.m" "$SRC/Core/SGPrefs.m" "$SRC/Core/SGViewTree.m" "$SRC/Core/SGGlass.m" \
+            "$SRC/Core/SGBackdrop.m" "$SRC/Core/SGFlagForce.m" "$SRC/Core/SGUIMode.m" \
+            "$SRC/Redesigned/Kit/SGRTokens.m" "$SRC/Redesigned/Kit/SGRPalette.m" "$SRC/Redesigned/Kit/SGRField.m" "$SRC/Redesigned/Kit/SGRFlow.m" \
+            "$SRC/Redesigned/Kit/SGRGlass.m" "$SRC/Redesigned/Kit/SGRGlyph.m" "$SRC/Redesigned/Kit/SGRRestyle.m" \
+            "$SRC/Redesigned/Kit/SGRActionRow.m" "$SRC/Redesigned/Kit/SGRDownload.m" "$SRC/Redesigned/Kit/SGRHeaderInfo.m" \
+            "$SRC/Redesigned/Kit/SGRedesign.m" \
+            -framework UIKit -framework QuartzCore -framework CoreGraphics -framework CoreImage -framework Foundation -framework Symbols \
+            -o "$APPDIR/AlbumHarness"
+
+          # Full Info.plist compatible with LiveContainer, zContainer, TrollStore and standard resigners
+          cat > "$APPDIR/Info.plist" <<'PLIST'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0"><dict>
+          <key>CFBundlePackageType</key><string>APPL</string>
+          <key>CFBundleInfoDictionaryVersion</key><string>6.0</string>
+          <key>CFBundleDevelopmentRegion</key><string>en</string>
+          <key>CFBundleExecutable</key><string>AlbumHarness</string>
+          <key>CFBundleIdentifier</key><string>com.vojta.albumharness</string>
+          <key>CFBundleName</key><string>AlbumHarness</string>
+          <key>CFBundleDisplayName</key><string>AlbumHarness</string>
+          <key>CFBundleVersion</key><string>1</string>
+          <key>CFBundleShortVersionString</key><string>1.0</string>
+          <key>MinimumOSVersion</key><string>17.0</string>
+          <key>CFBundleSupportedPlatforms</key><array><string>iPhoneOS</string></array>
+          <key>LSRequiresIPhoneOS</key><true/>
+          <key>UIDeviceFamily</key><array><integer>1</integer><integer>2</integer></array>
+          <key>UISupportedInterfaceOrientations</key><array><string>UIInterfaceOrientationPortrait</string></array>
+          <key>UIUserInterfaceStyle</key><string>Dark</string>
+          <key>UILaunchScreen</key><dict/>
+          <key>UIApplicationSceneManifest</key><dict>
+            <key>UIApplicationSupportsMultipleScenes</key><false/>
+          </dict>
+          </dict></plist>
+          PLIST
+
+          # Basic entitlements enabling signing in LiveContainer / zContainer
+          cat > "$OUT/entitlements.plist" <<'ENTITLEMENTS'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0"><dict>
+          <key>get-task-allow</key><true/>
+          </dict></plist>
+          ENTITLEMENTS
+
+          # Ad-hoc sign so LiveContainer and zContainer find a valid code signature slot to re-sign
+          codesign -s - --force --deep --entitlements "$OUT/entitlements.plist" "$APPDIR"
+
+          cp -R "$APPDIR" "$OUT/Payload/AlbumHarness.app"
+          (cd "$OUT" && /usr/bin/zip -qry "AlbumHarness.ipa" Payload)
+          rm -rf "$OUT/Payload" "$GENERATED" "$OUT/entitlements.plist"
+          echo "Successfully built and signed AlbumHarness.ipa"
+
+      - name: Upload Album Harness IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: AlbumHarness
+          path: harness/album/build/AlbumHarness.ipa
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 7
