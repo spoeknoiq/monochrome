@@ -37,7 +37,7 @@ static const CGFloat kMinHero = 120, kMinCover = 80;
 
 static char kHeaderKey, kCoverKey, kTitleKey, kParentKey, kMetaKey, kAddKey, kDownloadKey, kPlayKey, kShuffleKey;
 static char kHeroKey, kHeroHeightKey, kHeaderHeightKey, kInfoKey, kHeaderWatchedKey, kRetryKey;
-static char kExploreKey, kRowWatchedKey, kMoreKey, kPinnedMoreKey;
+static char kExploreKey, kRowWatchedKey, kMoreKey, kPinnedMoreKey, kShareKey, kPinnedShareKey;
 
 #pragma mark - moving Spotify's views
 
@@ -332,7 +332,27 @@ static SGRHeaderInfo *applyInfo(UIView *header, UIView *page) {
     [info showCreatorLink:parent];
 
     // More, pinned over the page rather than left in the header, which is blanked and scrolls away.
-    SGRPinnedMore(page, &kPinnedMoreKey, SGRFindByIdentifier(header, @"Components.UI.ContextMenuButton*", &kMoreKey));
+    SGRMirrorButton *more = SGRPinnedMore(page, &kPinnedMoreKey, SGRFindByIdentifier(header, @"Components.UI.ContextMenuButton*", &kMoreKey));
+
+    // Share button: a glass circle beside ⋯, the way the Music app shows it -- both sit at the top trailing
+    // corner, with the share button one circle-width to the left of ⋯.
+    UIView *shareSource = SGRFindByIdentifier(header, @"Components.UI.ShareButton*", &kShareKey);
+    SGRMirrorButton *share = objc_getAssociatedObject(page, &kPinnedShareKey);
+    if (!share) {
+        share = [[SGRMirrorButton alloc] initWithFrame:CGRectZero];
+        share.fallbackGlyph = [UIImage systemImageNamed:@"square.and.arrow.up"];
+        share.glyphColor = SGRPrimary();
+        objc_setAssociatedObject(page, &kPinnedShareKey, share, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    }
+    if (share.superview != page) [page addSubview:share];
+    if (shareSource) [share feedFrom:shareSource];
+    share.hidden = NO;
+    // Position the share button directly to the left of the ⋯ with a 4pt gap, same vertical centre.
+    if (!CGRectIsEmpty(more.frame)) {
+        CGRect mf = more.frame;
+        CGFloat side = SGRGlassCircleSize;
+        share.frame = CGRectMake(mf.origin.x - 4 - side, mf.origin.y, side, side);
+    }
 
     UIView *play = floatingIn(page, @"header-play-button", &kPlayKey);
     UIView *shuffle = floatingIn(page, @"Components.UI.ShuffleButton", &kShuffleKey);

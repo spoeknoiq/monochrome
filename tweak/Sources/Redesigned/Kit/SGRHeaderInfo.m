@@ -47,8 +47,11 @@ static BOOL setText(UILabel *label, NSString *text) {
                          SGRSecondary(), 1, NSTextAlignmentCenter);
     _length = infoLabel(self, SGRFont(UIFontTextStyleFootnote, UIFontWeightRegular, UIContentSizeCategoryExtraLarge),
                         SGRTertiary(), 1, NSTextAlignmentCenter);
-    _about = infoLabel(self, SGRFont(UIFontTextStyleFootnote, UIFontWeightRegular, UIContentSizeCategoryExtraLarge),
-                       SGRSecondary(), 2, NSTextAlignmentNatural);
+    // The editorial description: italic, the way the Music app shows it.
+    UIFont *aboutBase = SGRFont(UIFontTextStyleFootnote, UIFontWeightRegular, UIContentSizeCategoryExtraLarge);
+    UIFontDescriptor *aboutDescriptor = [aboutBase.fontDescriptor fontDescriptorWithSymbolicTraits:UIFontDescriptorTraitItalic];
+    UIFont *aboutFont = aboutDescriptor ? [UIFont fontWithDescriptor:aboutDescriptor size:0] : aboutBase;
+    _about = infoLabel(self, aboutFont, SGRSecondary(), 2, NSTextAlignmentNatural);
 
     _shuffle = [[SGRMirrorButton alloc] initWithFrame:CGRectZero];
     _shuffle.fallbackGlyph = [UIImage systemImageNamed:@"shuffle"];

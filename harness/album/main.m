@@ -210,6 +210,8 @@ static NSString *trailingLabel(UIView *root) {
 - (BOOL)application:(UIApplication *)application didFinishLaunchingWithOptions:(NSDictionary *)options {
     self.window = [[UIWindow alloc] initWithFrame:UIScreen.mainScreen.bounds];
     CGFloat W = self.window.bounds.size.width, H = self.window.bounds.size.height;
+    // `static`: centered square cover (Apple Music's static/non-animated album mode) instead of full bleed.
+    BOOL staticCover = [NSProcessInfo.processInfo.arguments containsObject:@"static"];
 
     UIViewController *root = [UIViewController new];
     root.view.backgroundColor = [UIColor colorWithWhite:0.07 alpha:1];
@@ -248,6 +250,18 @@ static NSString *trailingLabel(UIView *root) {
     coverPicture.contentMode = UIViewContentModeScaleAspectFill;
     coverPicture.clipsToBounds = YES;
     coverPicture.accessibilityIdentifier = @"Encore.ImageView";
+    // In `static` mode, the cover is a rounded square centred on a dark background (Apple Music's
+    // non-animated mode): a 10pt corner radius, a subtle shadow, and the hero dissolve is not drawn
+    // (the redesign's AlbumHero sees a 248pt-wide cover and skips the full-bleed path when the cover
+    // view is narrower than the page, which it is here: 248 vs W).
+    if (staticCover) {
+        coverPicture.layer.cornerRadius = 10;
+        coverPicture.layer.cornerCurve = kCACornerCurveContinuous;
+        cover.layer.shadowColor = [UIColor blackColor].CGColor;
+        cover.layer.shadowOpacity = 0.4;
+        cover.layer.shadowRadius = 20;
+        cover.layer.shadowOffset = CGSizeMake(0, 8);
+    }
     [cover addSubview:coverPicture];
     box(groupStack, UIView.class, CGRectMake(0, 256, 0, 0), nil);
 
@@ -278,7 +292,7 @@ static NSString *trailingLabel(UIView *root) {
     cells.backgroundColor = UIColor.clearColor;
     [cells registerClass:UICollectionViewCell.class forCellWithReuseIdentifier:@"meta"];
     self.meta = [SGRMetaSource new];
-    self.meta.items = @[@"Album", @"•", @"31. 1. 2025"];
+    self.meta.items = @[@"Hip-hop/Rap", @"•", @"2025", @"•", @"∿ Lossless"];
     cells.dataSource = self.meta;
     cells.delegate = self.meta;
     [metadata addSubview:cells];
@@ -293,8 +307,7 @@ static NSString *trailingLabel(UIView *root) {
                          @[@"Components.UI.ContextMenuButton-3OxfaVgvTxUTy7276t7SPU", @"ellipsis", @"More options", @158, @0, @48, @48]];
     // `late` on the launch line: add is not in the row yet, the way an album opened for the first time has it.
     BOOL late = [NSProcessInfo.processInfo.arguments containsObject:@"late"];
-    // `download`: an album without add (the row's download is what Play's right shows then), playing the
-    // download button's states (download-mock.h).
+    // `download`: an album without add; `static` is declared at the top of the method.
     BOOL downloads = [NSProcessInfo.processInfo.arguments containsObject:@"download"];
     for (NSArray *action in actions) {
         if ((late || downloads) && [action[0] isEqualToString:@"Components.UI.AddToButton"]) continue;
@@ -303,6 +316,16 @@ static NSString *trailingLabel(UIView *root) {
         [_actionFrames addObject:[NSValue valueWithCGRect:frame]];
     }
 
+    // A share button in the header, the way Spotify has it. Concealed but present so the tweak can find it
+    // by its identifier (Components.UI.ShareButton) and pin its own glass circle beside the ⋯.
+    UIView *shareButtonEl = box(header, UIView.class, CGRectZero, nil);
+    UIView *shareButton = box(shareButtonEl, MockEncoreButton.class, CGRectZero, @"Components.UI.ShareButton");
+    shareButton.accessibilityLabel = @"Share";
+    UIImageView *shareGlyph = [[UIImageView alloc] initWithFrame:CGRectZero];
+    shareGlyph.image = [UIImage systemImageNamed:@"square.and.arrow.up"];
+    shareGlyph.tintColor = UIColor.whiteColor;
+    [shareButton addSubview:shareGlyph];
+
     // the track list under the header
     _listView = box(stack, _TtC32CreativeWorkPlatform_TemplateKit28CreativeWorkTemplateListView.class,
                     CGRectMake(0, 486.67, W, 700), nil);
@@ -310,23 +333,53 @@ static NSString *trailingLabel(UIView *root) {
     UIView *collection = box(_listView, UIView.class, _listView.bounds, nil);
     collection.backgroundColor = [UIColor colorWithWhite:0.07 alpha:1];
 
-    NSArray<NSArray<NSString *> *> *tracks = @[@[@"Wake Me Up (feat. Justice)", @"The Weeknd, Justice"],
-                                               @[@"Cry For Me", @"The Weeknd"],
-                                               @[@"I Can't Fucking Sing", @"The Weeknd"],
-                                               @[@"São Paulo (feat. Anitta)", @"The Weeknd, Anitta"],
-                                               @[@"Until We're Skin & Bones", @"The Weeknd"],
-                                               @[@"Baptized In Fear", @"The Weeknd"]];
+    NSArray<NSArray<NSString *> *> *tracks = @[@[@"Wake Me Up (feat. Justice)", @"The Weeknd, Justice", @"1", @"0", @"1"],
+                                               @[@"Cry For Me", @"The Weeknd", @"2", @"1", @"1"],
+                                               @[@"I Can't Fucking Sing", @"The Weeknd", @"3", @"0", @"0"],
+                                               @[@"São Paulo (feat. Anitta)", @"The Weeknd, Anitta", @"4", @"1", @"0"],
+                                               @[@"Until We're Skin & Bones", @"The Weeknd", @"5", @"0", @"0"],
+                                               @[@"Baptized In Fear", @"The Weeknd", @"6", @"0", @"0"]];
+    // Column layout matching Apple Music:
+    //  kNumLeft=16, kNumW=24: track number right-aligned
+    //  kTextLeft=48 (16+24+8): title and subtitle
+    //  trailing ⋯ at page-right minus 44pt
+    static const CGFloat kNumLeft = 16, kNumW = 24, kNumGap = 8, kTextLeft = 48;
     CGFloat y = 8;
     for (NSArray<NSString *> *track in tracks) {
+        NSString *title = track[0], *artist = track[1];
+        NSString *numStr = track[2];
+        BOOL popular = [track[3] boolValue];
+        BOOL explicit = [track[4] boolValue];
+
         UICollectionViewCell *cell = [[_TtC12Element_List18CollectionViewCell alloc] initWithFrame:CGRectMake(0, y, W, 56)];
         cell.backgroundColor = [UIColor colorWithWhite:0.07 alpha:1];
         [collection addSubview:cell];
         UIView *content = box(cell.contentView, MockRetrievalListStructuredDataView.class, cell.contentView.bounds, nil);
         UIView *row = box(content, UIView.class, content.bounds, @"Components.UI.RetrievalRowElementUI");
         row.backgroundColor = [UIColor colorWithWhite:0.07 alpha:1];
-        label(row, CGRectMake(16, 8, W - 90, 18), track[0], 13, UIColor.whiteColor, @"EncoreConsumerMobile.View.Granular.Title");
-        label(row, CGRectMake(16, 30, W - 90, 15.33), track[1], 11, UIColor.whiteColor, @"EncoreConsumerMobile.View.Granular.Subtitle");
-        actionButton(row, CGRectMake(W - 64, 4, 48, 48), @"Components.UI.ContextMenuButton-5673WA8EEUSPx1ir26lhGW", @"ellipsis", @"More options");
+
+        // Track number label -- right-aligned in a fixed column, monospaced digits (or ★ for popular)
+        UILabel *numLabel = [UILabel new];
+        numLabel.font = [UIFont monospacedDigitSystemFontOfSize:13 weight:UIFontWeightRegular];
+        numLabel.text = popular ? [@"★" stringByAppendingString:numStr] : numStr;
+        numLabel.textColor = popular ? [UIColor colorWithRed:1 green:0.84 blue:0 alpha:1]
+                                     : [UIColor colorWithWhite:0.55 alpha:1];
+        numLabel.textAlignment = NSTextAlignmentRight;
+        numLabel.frame = CGRectMake(kNumLeft, 0, kNumW, 56);
+        numLabel.accessibilityIdentifier = @"EncoreConsumerMobile.View.Granular.TrackNumber";
+        [row addSubview:numLabel];
+
+        // Title (with optional 🄴 explicit badge appended)
+        NSString *displayTitle = explicit ? [title stringByAppendingString:@" 🄴"] : title;
+        label(row, CGRectMake(kTextLeft, 8, W - kTextLeft - 60, 18), displayTitle,
+              13, UIColor.whiteColor, @"EncoreConsumerMobile.View.Granular.Title");
+        label(row, CGRectMake(kTextLeft, 30, W - kTextLeft - 60, 15.33), artist,
+              11, UIColor.whiteColor, @"EncoreConsumerMobile.View.Granular.Subtitle");
+
+        // Horizontal ⋯ at trailing edge, same as before but using the system ellipsis symbol
+        actionButton(row, CGRectMake(W - 60, 4, 44, 48),
+                     @"Components.UI.ContextMenuButton-5673WA8EEUSPx1ir26lhGW",
+                     @"ellipsis", @"More options");
         y += 56;
     }
     _tracksBottom = y;
